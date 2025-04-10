@@ -5,6 +5,32 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Generated Album Cover</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <style>
+        .fallback-indicator {
+            display: inline-block;
+            background-color: #ff9800;
+            color: #000;
+            font-size: 0.7rem;
+            padding: 2px 6px;
+            border-radius: 4px;
+            margin-left: 6px;
+            vertical-align: middle;
+        }
+        
+        .info-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        
+        .fallback-warning {
+            background-color: rgba(255, 152, 0, 0.1);
+            border-left: 4px solid #ff9800;
+            padding: 10px;
+            margin-bottom: 20px;
+            border-radius: 0 4px 4px 0;
+        }
+    </style>
 </head>
 <body>
     <div class="container result-container">
@@ -14,45 +40,63 @@
             <img src="{{ url_for('serve_image', filename=image_file) }}" alt="Album Cover" class="album-cover">
         </div>
         
+        {% if using_fallback %}
+        <div class="fallback-warning">
+            <p><strong>Note:</strong> Some Spotify data couldn't be retrieved. The cover was generated using estimated values for some audio features.</p>
+        </div>
+        {% endif %}
+        
         <div class="playlist-info">
             <div class="info-section">
-                <h3>Playlist Analysis</h3>
+                <div class="info-header">
+                    <h3>Playlist Analysis</h3>
+                    {% if using_fallback %}
+                    <span class="fallback-indicator">Using Fallback Data</span>
+                    {% endif %}
+                </div>
                 
                 <div class="info-grid">
                     <div class="info-item">
                         <span class="info-label">Genres:</span>
                         <span class="info-value">{{ genres }}</span>
+                        {% if not found_genres %}<span class="fallback-indicator">estimated</span>{% endif %}
                     </div>
                     
                     <div class="info-item">
                         <span class="info-label">Mood:</span>
                         <span class="info-value">{{ mood }}</span>
+                        {% if not found_audio_features %}<span class="fallback-indicator">estimated</span>{% endif %}
                     </div>
                     
                     <div class="info-item">
                         <span class="info-label">Tempo:</span>
                         <span class="info-value">{{ tempo }}</span>
+                        {% if not found_audio_features %}<span class="fallback-indicator">estimated</span>{% endif %}
                     </div>
                     
                     <div class="info-item">
                         <span class="info-label">Energy:</span>
                         <span class="info-value">{{ energy }}</span>
+                        {% if not found_audio_features %}<span class="fallback-indicator">estimated</span>{% endif %}
                     </div>
                     
                     {% if features %}
                     <div class="info-item">
                         <span class="info-label">Danceability:</span>
                         <span class="info-value">{{ "%.2f"|format(features.danceability) }}</span>
+                        {% if not found_audio_features %}<span class="fallback-indicator">estimated</span>{% endif %}
                     </div>
                     
                     <div class="info-item">
                         <span class="info-label">Acousticness:</span>
                         <span class="info-value">{{ "%.2f"|format(features.acousticness) }}</span>
+                        {% if not found_audio_features %}<span class="fallback-indicator">estimated</span>{% endif %}
                     </div>
                     
                     <div class="info-item">
                         <span class="info-label">Valence:</span>
                         <span class="info-value">{{ "%.2f"|format(features.valence) }}</span>
+                        {% if not found_audio_features %}<span class="fallback-indicator">estimated</span>{% endif %}
                     </div>
                     {% endif %}
                 </div>
@@ -61,7 +105,6 @@
         
         <div class="actions">
             <a href="{{ url_for('index') }}" class="button">Generate Another Cover</a>
-            <!-- You could add download functionality here -->
         </div>
     </div>
     <script src="{{ url_for('static', filename='script.js') }}"></script>

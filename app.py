@@ -1,338 +1,483 @@
-import os, sys, json, random, string, time, gc, logging
+import os
+import json
+import random
+import string
+import statistics
 from pathlib import Path
-from io import BytesIO
-from flask import Flask, request, render_template, send_from_directory, url_for
+from collections import Counter
+
+from flask import Flask, request, render_template, send_from_directory, jsonify
 import spotipy
 from spotipy.oauth2 import SpotifyClientCredentials
+
 import torch
-from diffusers import DiffusionPipeline, StableDiffusionPipeline
+from diffusers import StableDiffusionPipeline
 from transformers import pipeline as text_pipeline
 from PIL import Image
 from dotenv import load_dotenv
 
-# Memory optimization settings
-os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
-
-# Setup logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-logger = logging.getLogger(__name__)
-
-# Create cache directory
-CACHE_DIR = Path("./model_cache")
+#Setup paths and environment 
+BASE_DIR = Path(os.path.dirname(os.path.abspath(__file__)))
+CACHE_DIR = BASE_DIR / "model_cache"
+COVERS_DIR = BASE_DIR / "generated_covers"
 CACHE_DIR.mkdir(exist_ok=True)
+COVERS_DIR.mkdir(exist_ok=True)
 os.environ["HF_HOME"] = str(CACHE_DIR)
 
-# Load environment variables
-load_dotenv()
+#Load environment variables 
+load_dotenv()  
 SPOTIFY_CLIENT_ID = os.getenv("SPOTIFY_CLIENT_ID")
 SPOTIFY_CLIENT_SECRET = os.getenv("SPOTIFY_CLIENT_SECRET")
-if not SPOTIFY_CLIENT_ID or not SPOTIFY_CLIENT_SECRET:
-    raise ValueError("Please set SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET in the .env file.")
 
-# Initialize Spotify client
-sp = spotipy.Spotify(
-    auth_manager=SpotifyClientCredentials(
-        client_id=SPOTIFY_CLIENT_ID, client_secret=SPOTIFY_CLIENT_SECRET
-    ),
-    requests_timeout=15
-)
-
-# Initialize device
+#Initialize global variables 
+sp = None
+pipe = None
+title_generator = None
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-logger.info(f"Using device: {device}")
+model_initialized = False
+using_fallback = False
 
-# Model selection based on memory
-DEFAULT_MODEL = "CompVis/stable-diffusion-v1-4"  # Smaller model
-HIGH_QUALITY_MODEL = "stabilityai/stable-diffusion-xl-base-1.0"  # Larger model
+#Initialize Flask app
+app = Flask(__name__, template_folder=str(BASE_DIR / "templates"))
 
-# Memory utility functions
-def clear_memory():
-    """Clear CUDA cache to free up memory"""
-    if torch.cuda.is_available():
-        torch.cuda.empty_cache()
-        gc.collect()
-
-def get_available_memory():
-    """Get available CUDA memory in GB"""
-    if torch.cuda.is_available():
-        return (torch.cuda.get_device_properties(0).total_memory - 
-                torch.cuda.memory_allocated(0)) / 1024**3
-    return 0
-
-def load_diffusion_pipeline(high_quality=False):
-    """Load the diffusion pipeline with memory optimization"""
-    logger.info("Loading diffusion pipeline...")
-    start_time = time.time()
-    clear_memory()
-    
-    # Select model based on available memory
-    available_mem = get_available_memory()
-    use_high_quality = high_quality and available_mem > 10.0
-    model_name = HIGH_QUALITY_MODEL if use_high_quality else DEFAULT_MODEL
-    logger.info(f"Selected model: {model_name} (Memory: {available_mem:.2f} GB)")
-    
-    # Create model directory
-    model_cache_dir = CACHE_DIR / model_name.replace("/", "_")
-    model_cache_dir.mkdir(exist_ok=True)
-    
-    try:
-        if device.type == "cuda":
-            # Use float16 for GPU
-            pipe = StableDiffusionPipeline.from_pretrained(
-                model_name,
-                torch_dtype=torch.float16,
-                variant="fp16" if "xl" in model_name else None,
-                use_safetensors=True,
-                cache_dir=model_cache_dir,
-                resume_download=True,
-                local_files_only=False,
-                safety_checker=None  # Disable safety checker to save memory
-            ).to(device)
-            
-            # Memory optimizations
-            if available_mem < 6.0:
-                logger.info("Enabling CPU offloading")
-                pipe.enable_sequential_cpu_offload()
-            pipe.enable_attention_slicing(slice_size="auto")
-            try:
-                pipe.enable_xformers_memory_efficient_attention()
-            except:
-                pass
-        else:
-            # Use float32 for CPU
-            pipe = StableDiffusionPipeline.from_pretrained(
-                model_name,
-                torch_dtype=torch.float32,
-                use_safetensors=True,
-                cache_dir=model_cache_dir,
-                resume_download=True,
-                safety_checker=None
-            ).to("cpu")
-        
-        end_time = time.time()
-        logger.info(f"Pipeline loaded in {end_time - start_time:.2f} seconds")
-        return pipe
-        
-    except torch.cuda.OutOfMemoryError:
-        logger.error("CUDA out of memory. Trying with smaller model and optimizations...")
-        clear_memory()
-        
-        # Retry with minimal model
-        pipe = StableDiffusionPipeline.from_pretrained(
-            DEFAULT_MODEL,
-            torch_dtype=torch.float16,
-            use_safetensors=True,
-            cache_dir=CACHE_DIR / DEFAULT_MODEL.replace("/", "_"),
-            safety_checker=None,
-            requires_safety_checker=False
-        ).to(device)
-        pipe.enable_sequential_cpu_offload()
-        pipe.enable_attention_slicing(slice_size=1)
-        return pipe
-    
-    except Exception as e:
-        logger.error(f"Error loading pipeline: {e}")
-        # If all else fails, try CPU
-        if device.type == "cuda":
-            logger.info("Attempting CPU fallback")
-            return load_diffusion_pipeline_cpu()
-        raise
-
-def load_diffusion_pipeline_cpu():
-    """Load the pipeline on CPU as a last resort"""
-    return StableDiffusionPipeline.from_pretrained(
-        DEFAULT_MODEL,
-        torch_dtype=torch.float32,
-        use_safetensors=True,
-        cache_dir=CACHE_DIR / DEFAULT_MODEL.replace("/", "_"),
-        safety_checker=None
-    ).to("cpu")
-
-def load_title_generator():
-    """Load the title generator pipeline"""
-    try:
-        device_id = 0 if device.type == "cuda" else -1
-        return text_pipeline(
-            "text-generation",
-            model="EleutherAI/gpt-j-6B",
-            device=device_id,
-            model_kwargs={"cache_dir": CACHE_DIR / "title_generator"}
-        )
-    except Exception as e:
-        logger.error(f"Error loading title generator: {e}")
-        # Return a simple fallback function
-        def simple_title_generator(prompt, **kwargs):
-            """Fallback title generator that doesn't require a model"""
-            words = ['Sonic', 'Rhythmic', 'Melodic', 'Harmonic', 'Electric', 'Vibrant']
-            nouns = ['Journey', 'Waves', 'Paths', 'Horizons', 'Dreams', 'Echoes']
-            title = f"{random.choice(words)} {random.choice(nouns)}"
-            return [{'generated_text': f"Title: {title}"}]
-        return simple_title_generator
-
+#Helper functions
 def generate_random_string(size=10):
     return ''.join(random.choices(string.ascii_letters + string.digits, k=size))
 
-def extract_playlist_genres(playlist_url):
-    """Extract genres from a Spotify playlist"""
-    playlist_id = playlist_url.split("/")[-1].split("?")[0]
-    results = sp.playlist_tracks(playlist_id)
-    genre_set = set()
-    for item in results.get("items", []):
-        track = item.get("track")
-        if track and track.get("artists"):
-            artist_info = sp.artist(track["artists"][0]["id"])
-            for genre in artist_info.get("genres", []):
-                genre_set.add(genre)
-    return ", ".join(genre_set) if genre_set else "various genres"
-
-def generate_cover_image(prompt, low_memory=False):
-    """Generate a cover image with memory optimization"""
-    clear_memory()
+def initialize_models():
+    """Initialize all models once at startup"""
+    global sp, pipe, title_generator, device, model_initialized
     
-    # Enhanced negative prompt to ensure no human figures
-    negative_prompt = (
-        "no humans, no faces, no body parts, no humanoid figures, no people, "
-        "no portraits, no crowds, no human-like creatures, no person, no man, no woman, "
-        "no child, no hands, no fingers, avoid any recognizable human features, "
-        "no human subjects, no human elements, no human presence, no human forms"
-    )
+    print(f"Device: {device} - RTX 4080 Super (16GB VRAM)")
     
-    steps = 20 if low_memory else 30
+    # Initialize Spotify client
+    print("Initializing Spotify client...")
+    try:
+        auth_manager = SpotifyClientCredentials(
+            client_id=SPOTIFY_CLIENT_ID,
+            client_secret=SPOTIFY_CLIENT_SECRET,
+            cache_handler=None
+        )
+        
+        sp = spotipy.Spotify(
+            auth_manager=auth_manager,
+            requests_timeout=30,
+            retries=3
+        )
+        
+        # Quick test
+        sp.search(q='test', limit=1)
+        print("✓ Spotify API connection successful")
+    except Exception as e:
+        print(f"✗ Spotify API initialization failed: {e}")
+        sp = None
     
     try:
-        logger.info(f"Generating image with prompt: {prompt}")
+        print("Loading Stable Diffusion model...")
+        # Using SD v1.5 for better performance on 16GB VRAM
+        model_id = "runwayml/stable-diffusion-v1-5"
+        
+        pipe = StableDiffusionPipeline.from_pretrained(
+            model_id,
+            torch_dtype=torch.float16,  # Use half precision for 16GB VRAM
+            cache_dir=CACHE_DIR / model_id.replace("/", "_")
+        ).to(device)
+        
+        pipe.enable_attention_slicing()
+        pipe.enable_xformers_memory_efficient_attention()
+        torch.backends.cudnn.benchmark = True
+        
+        print("✓ Image generation model loaded")
+    except Exception as e:
+        print(f"✗ Error loading image model: {e}")
+        pipe = None
+    
+    # Load smaller title generator
+    try:
+        print("Loading title generator...")
+        title_generator = text_pipeline(
+            "text-generation",
+            model="distilgpt2",
+            device=0 if device.type == "cuda" else -1
+        )
+        print("✓ Title generator loaded")
+    except Exception as e:
+        print(f"✗ Error loading title generator: {e}")
+        title_generator = None
+    
+    model_initialized = True
+    return all([sp, pipe, title_generator])
+
+def extract_playlist_data(playlist_url):
+    """Extract data from playlist with fallback indicators"""
+    global using_fallback
+    
+    # Reset fallback indicator
+    using_fallback = False
+    
+    # Check Spotify client
+    if not sp:
+        print("Attempting to create new Spotify client...")
+        try:
+            auth_manager = SpotifyClientCredentials(
+                client_id=SPOTIFY_CLIENT_ID,
+                client_secret=SPOTIFY_CLIENT_SECRET
+            )
+            temp_sp = spotipy.Spotify(auth_manager=auth_manager)
+            test = temp_sp.search(q='test', limit=1)
+            if test and 'tracks' in test:
+                sp_client = temp_sp
+            else:
+                raise Exception("Test failed")
+        except:
+            using_fallback = True
+            return get_fallback_data("Failed to initialize Spotify client")
+    else:
+        sp_client = sp
+    
+    # Get playlist ID
+    if "playlist/" not in playlist_url:
+        return {"error": "Invalid Spotify playlist URL format"}
+    
+    playlist_id = playlist_url.split("playlist/")[-1].split("?")[0].split("/")[0]
+    print(f"Processing playlist ID: {playlist_id}")
+    
+    try:
+        # Get basic playlist info
+        try:
+            playlist_info = sp_client.playlist(playlist_id, fields="name,description")
+            playlist_name = playlist_info.get("name", "Unknown Playlist")
+            print(f"Found playlist: {playlist_name}")
+        except Exception as e:
+            print(f"Error getting playlist info: {e}")
+            playlist_name = "Unknown Playlist"
+            using_fallback = True
+        
+        # Get tracks
+        try:
+            results = sp_client.playlist_tracks(
+                playlist_id,
+                fields="items(track(id,name,artists(id,name))),next",
+                market="US",
+                limit=20
+            )
+            tracks = results.get("items", [])
+            
+            if not tracks:
+                using_fallback = True
+                return get_fallback_data("No tracks found", playlist_name)
+                
+            # Extract track IDs, names, artists
+            track_ids = []
+            artists = []
+            track_names = []
+            
+            for item in tracks:
+                track = item.get("track")
+                if track and track.get("id"):
+                    track_ids.append(track.get("id"))
+                    track_names.append(track.get("name"))
+                    if track.get("artists"):
+                        for artist in track.get("artists"):
+                            if artist.get("id"):
+                                artists.append(artist.get("id"))
+            
+            if not track_ids:
+                using_fallback = True
+                return get_fallback_data("No valid tracks found", playlist_name)
+        except Exception as e:
+            print(f"Error getting tracks: {e}")
+            using_fallback = True
+            return get_fallback_data("Error getting tracks", playlist_name)
+        
+        # Initialize default values
+        audio_features_found = False
+        genres_found = False
+        
+        # Get audio features and genres
+        avg_features = {}
+        genres = []
+        
+        # Try to get audio features
+        try:
+            # Test batch with fewer tracks first
+            test_batch = track_ids[:3]
+            features = sp_client.audio_features(test_batch)
+            
+            if features and any(features):
+                audio_features = []
+                # Get all features in smaller batches
+                for i in range(0, len(track_ids), 5):
+                    batch = track_ids[i:i+5]
+                    batch_features = sp_client.audio_features(batch)
+                    if batch_features:
+                        audio_features.extend([f for f in batch_features if f])
+                
+                # Calculate averages
+                if audio_features:
+                    audio_features_found = True
+                    feature_keys = [
+                        "danceability", "energy", "loudness", "speechiness", 
+                        "acousticness", "instrumentalness", "liveness", "valence", "tempo"
+                    ]
+                    
+                    for key in feature_keys:
+                        values = [float(af[key]) for af in audio_features if af and key in af and af[key] is not None]
+                        avg_features[key] = statistics.mean(values) if values else 0.5
+        except Exception as e:
+            print(f"Error getting audio features: {e}")
+            audio_features_found = False
+        
+        # Try to get genres
+        try:
+            # Only get 3 artists at most
+            unique_artists = list(set(artists))[:3]
+            
+            if unique_artists:
+                artists_data = sp_client.artists(unique_artists)
+                if artists_data and "artists" in artists_data:
+                    for artist in artists_data["artists"]:
+                        genres.extend(artist.get("genres", []))
+                    
+                    # Remove duplicates
+                    genres = list(set(genres))
+                    genres_found = bool(genres)
+        except Exception as e:
+            print(f"Error getting genres: {e}")
+            genres_found = False
+        
+        # Use fallbacks if needed
+        if not audio_features_found:
+            using_fallback = True
+            print("Using fallback audio features")
+            avg_features = {
+                "danceability": 0.65, "energy": 0.7, "loudness": -7,
+                "speechiness": 0.05, "acousticness": 0.3, "instrumentalness": 0.1,
+                "liveness": 0.15, "valence": 0.6, "tempo": 120
+            }
+        
+        if not genres_found:
+            using_fallback = True
+            print("Using fallback genres")
+            genres = ["electronic", "pop", "indie"]
+        
+        # Calculate descriptors
+        tempo = avg_features.get("tempo", 120)
+        energy = avg_features.get("energy", 0.7)
+        valence = avg_features.get("valence", 0.6)
+        
+        tempo_range = "slow" if tempo < 80 else "fast" if tempo >= 120 else "moderate"
+        energy_level = "calm" if energy < 0.33 else "energetic" if energy >= 0.66 else "balanced"
+        
+        # Calculate mood
+        if valence > 0.7 and energy > 0.7:
+            mood = "euphoric"
+        elif valence > 0.7 and energy < 0.3:
+            mood = "peaceful"
+        elif valence < 0.3 and energy > 0.7:
+            mood = "angry"
+        elif valence < 0.3 and energy < 0.3:
+            mood = "melancholic"
+        elif valence > 0.5 and energy > 0.5:
+            mood = "upbeat"
+        elif valence > 0.5 and energy < 0.5:
+            mood = "relaxed"
+        elif valence < 0.5 and energy > 0.5:
+            mood = "tense"
+        elif valence < 0.5 and energy < 0.5:
+            mood = "somber"
+        else:
+            mood = "balanced"
+        
+        # Return complete data
+        return {
+            "track_names": track_names[:10],
+            "genres": genres[:5],
+            "audio_features": avg_features,
+            "tempo_range": tempo_range,
+            "energy_level": energy_level,
+            "mood_descriptor": mood,
+            "playlist_name": playlist_name,
+            "using_fallback": using_fallback,
+            "found_audio_features": audio_features_found,
+            "found_genres": genres_found
+        }
+        
+    except Exception as e:
+        print(f"Error extracting playlist data: {e}")
+        using_fallback = True
+        return get_fallback_data(f"Error: {str(e)}", "Unknown Playlist")
+
+def get_fallback_data(reason, playlist_name="Playlist"):
+    """Create fallback data with a reason"""
+    print(f"Using fallback data: {reason}")
+    return {
+        "track_names": ["Unknown Track"],
+        "genres": ["electronic", "pop", "indie"],
+        "audio_features": {
+            "danceability": 0.65, "energy": 0.7, "loudness": -7,
+            "speechiness": 0.05, "acousticness": 0.3, "instrumentalness": 0.1,
+            "liveness": 0.15, "valence": 0.6, "tempo": 120
+        },
+        "tempo_range": "moderate",
+        "energy_level": "balanced",
+        "mood_descriptor": "upbeat",
+        "playlist_name": playlist_name,
+        "using_fallback": True,
+        "fallback_reason": reason,
+        "found_audio_features": False,
+        "found_genres": False
+    }
+
+def create_prompt_from_data(playlist_data, user_mood=None):
+    """Create optimized prompt for stable diffusion"""
+    genres_str = ", ".join(playlist_data.get("genres", ["various"]))
+    tempo = playlist_data.get("tempo_range", "moderate")
+    energy = playlist_data.get("energy_level", "balanced")
+    mood = user_mood if user_mood else playlist_data.get("mood_descriptor", "balanced")
+    
+    prompt = (
+        f"premium album cover art, {genres_str} music, {mood} atmosphere, "
+        f"{tempo} rhythm, {energy} feeling, professional artwork, "
+        f"highly detailed, 8k, trending on artstation"
+    )
+    
+    if mood == "euphoric":
+        prompt += ", vibrant colors, dynamic composition"
+    elif mood == "peaceful":
+        prompt += ", serene landscape, soft lighting"
+    elif mood == "angry":
+        prompt += ", dark tones, sharp angles"
+    elif mood == "melancholic":
+        prompt += ", muted colors, misty atmosphere"
+    
+    return prompt
+
+def generate_cover_image(prompt):
+    if not pipe:
+        return Image.new('RGB', (512, 512), color='#3A506B')
+    
+    print(f"Generating with prompt: {prompt}")
+    
+    # Clear CUDA cache
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+    
+    try:
+        # Fixed and improved negative prompt
+        negative_prompt = "text, words, letters, signature, watermark, low quality, blurry, pixelated"
+        
         result = pipe(
             prompt=prompt,
             negative_prompt=negative_prompt,
-            num_inference_steps=steps,
+            num_inference_steps=30,  
             guidance_scale=7.5,
+            width=768,
+            height=768,
         )
-        image = result.images[0]
-        clear_memory()
-        return image
-    
-    except torch.cuda.OutOfMemoryError:
-        clear_memory()
-        # Try with minimal settings
-        logger.info("Out of memory. Trying with minimal settings...")
-        try:
-            result = pipe(
-                prompt=prompt,
-                negative_prompt=negative_prompt,
-                num_inference_steps=15,
-                guidance_scale=5.0,
-            )
-            return result.images[0]
-        except Exception:
-            # Create a black image as fallback
-            img = Image.new('RGB', (512, 512), color='black')
-            from PIL import ImageDraw
-            draw = ImageDraw.Draw(img)
-            draw.text((50, 240), "Error generating image", fill="white")
-            return img
-    
+        
+        return result.images[0]
+        
     except Exception as e:
-        logger.error(f"Error generating image: {e}")
-        img = Image.new('RGB', (512, 512), color='black')
-        return img
+        print(f"Error generating image: {e}")
+        return Image.new('RGB', (512, 512), color='#3A506B')
 
-def generate_title(genres, mood=""):
-    """Generate a playlist title"""
-    prompt = "Create a unique album title for a playlist. "
-    if mood:
-        prompt += f"It has a {mood} mood, "
-    prompt += f"with genres: {genres}. Title:"
+def generate_title(playlist_data, mood=""):
+    """Generate album title"""
+    if not title_generator:
+        return "Cosmic Waves"  # Simple fallback
+    
+    genres = ", ".join(playlist_data.get("genres", ["music"]))
+    mood_to_use = mood if mood else playlist_data.get("mood_descriptor", "balanced")
+    
+    prompt = f"Create a unique album title for {mood_to_use} {genres} music: "
     
     try:
         output = title_generator(
             prompt,
-            max_new_tokens=20,
+            max_new_tokens=10,
             do_sample=True,
-            temperature=0.7
+            temperature=0.8
         )
-        full_text = output[0]['generated_text']
         
-        if "Title:" in full_text:
-            title = full_text.split("Title:")[1].strip()
-        else:
-            title = full_text.strip()
-        return title.split("\n")[0][:50]
-    except Exception as e:
-        logger.error(f"Error generating title: {e}")
-        return f"Playlist: {genres[:30]}"
+        # Extract just the title
+        title = output[0]['generated_text'].replace(prompt, "").strip()
+        return title.split("\n")[0][:40]
+    except:
+        # Fallback titles
+        adjectives = ["Cosmic", "Velvet", "Electric", "Crystal", "Neon", "Midnight"]
+        nouns = ["Waves", "Dreams", "Echo", "Horizon", "Pulse", "Journey"]
+        return f"{random.choice(adjectives)} {random.choice(nouns)}"
 
-app = Flask(__name__)
-
+# --- Routes ---
 @app.route("/", methods=["GET", "POST"])
 def index():
+    global using_fallback
+    
+    if not model_initialized:
+        if initialize_models():
+            print("Models initialized successfully")
+        else:
+            print("Failed to initialize models")
+    
     if request.method == "POST":
-        try:
-            playlist_url = request.form.get("playlist_url")
-            mood = request.form.get("mood", "").strip()
-            low_memory = get_available_memory() < 6.0
-            
-            if not playlist_url:
-                return render_template("index.html", error="Please enter a Spotify playlist URL.")
-            
-            genres = extract_playlist_genres(playlist_url)
-            
-            image_prompt = f"An artistic album cover for a playlist"
-            if mood:
-                image_prompt += f" with a {mood} mood"
-            image_prompt += f", inspired by genres: {genres}"
-            
-            cover_image = generate_cover_image(image_prompt, low_memory)
-            
-            # Create generated_covers directory if it doesn't exist
-            output_dir = Path("./generated_covers")
-            output_dir.mkdir(exist_ok=True)
-            
-            # Generate a random filename
-            random_filename = generate_random_string() + ".png"
-            img_path = output_dir / random_filename
-            
-            # Save the image with full path
-            logger.info(f"Saving image to {img_path}")
-            cover_image.save(img_path)
-            
-            # Set the relative path for the template
-            relative_path = f"generated_covers/{random_filename}"
-            
-            title = generate_title(genres, mood)
-            
-            return render_template(
-                "result.html",
-                title=title,
-                image_file=relative_path,
-                playlist_keywords=genres,
-                mood=mood
-            )
-        except Exception as e:
-            logger.error(f"Error: {e}")
-            return render_template("index.html", error=f"An error occurred: {str(e)}")
+        playlist_url = request.form.get("playlist_url")
+        user_mood = request.form.get("mood", "").strip()
+        
+        if not playlist_url:
+            return render_template("index.html", error="Please enter a Spotify playlist URL.")
+        
+        # Process the playlist
+        playlist_data = extract_playlist_data(playlist_url)
+        
+        # Handle URL format errors
+        if "error" in playlist_data and "Invalid Spotify playlist URL format" in playlist_data["error"]:
+            return render_template("index.html", error="Invalid Spotify playlist URL format")
+        
+        # Generate cover image
+        image_prompt = create_prompt_from_data(playlist_data, user_mood)
+        cover_image = generate_cover_image(image_prompt)
+        
+        # Save image
+        img_filename = generate_random_string() + ".png"
+        cover_image.save(COVERS_DIR / img_filename)
+        
+        # Generate title
+        title = generate_title(playlist_data, user_mood)
+        
+        # Data for display
+        display_data = {
+            "title": title,
+            "image_file": img_filename,
+            "genres": ", ".join(playlist_data.get("genres", [])),
+            "mood": user_mood if user_mood else playlist_data.get("mood_descriptor", ""),
+            "tempo": playlist_data.get("tempo_range", ""),
+            "energy": playlist_data.get("energy_level", ""),
+            "features": playlist_data.get("audio_features", {}),
+            "playlist_name": playlist_data.get("playlist_name", "Your Playlist"),
+            "using_fallback": using_fallback,
+            "found_audio_features": playlist_data.get("found_audio_features", False),
+            "found_genres": playlist_data.get("found_genres", False)
+        }
+        
+        return render_template("result.html", **display_data)
     else:
         return render_template("index.html")
 
 @app.route("/generated_covers/<path:filename>")
 def serve_image(filename):
-    """Serve images from the generated_covers directory"""
-    return send_from_directory('generated_covers', filename)
+    return send_from_directory(COVERS_DIR, filename)
+
+@app.route("/status")
+def status():
+    """API endpoint to check system status"""
+    return jsonify({
+        "models_loaded": model_initialized,
+        "spotify_working": sp is not None,
+        "gpu_available": torch.cuda.is_available(),
+        "gpu_name": torch.cuda.get_device_name(0) if torch.cuda.is_available() else None
+    })
 
 if __name__ == "__main__":
-    import argparse
-    
-    parser = argparse.ArgumentParser(description='Spotify Playlist Cover Generator')
-    parser.add_argument('--high-quality', action='store_true', help='Use high-quality model if possible')
-    parser.add_argument('--cpu-only', action='store_true', help='Force CPU mode')
-    parser.add_argument('--port', type=int, default=50, help='Port number')
-    
-    args = parser.parse_args()
-    
-    if args.cpu_only:
-        device = torch.device("cpu")
-    
-    # Load models
-    pipe = load_diffusion_pipeline(high_quality=args.high_quality)
-    title_generator = load_title_generator()
-    
-    app.run(debug=True, host="0.0.0.0", port=args.port)
+    initialize_models()
+    app.run(debug=False, host="0.0.0.0", port=50)
