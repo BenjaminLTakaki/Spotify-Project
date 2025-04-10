@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Generated Album Cover</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <h1>{{ title }}</h1>
+        <img src="{{ url_for('serve_image', filename=image_file) }}" alt="Album Cover">
+        <p>Keywords used: {{ playlist_keywords }}</p>
+        {% if mood %}
+        <p>Mood: {{ mood }}</p>
+        {% endif %}
+        <a href="{{ url_for('index') }}">Try another playlist</a>
+    </div>
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>

@@ -1,0 +1,12 @@
+flask
+spotipy
+torch==2.0.1+cu126
+torchvision==0.15.2+cu126
+torchaudio==2.0.2+cu126
+diffusers
+transformers
+Pillow
+python-dotenv
+accelerate
+safetensors
+xformers
