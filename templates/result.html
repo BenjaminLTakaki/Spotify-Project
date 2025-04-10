@@ -2,18 +2,67 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Generated Album Cover</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
-    <div class="container">
-        <h1>{{ title }}</h1>
-        <img src="{{ url_for('serve_image', filename=image_file) }}" alt="Album Cover">
-        <p>Keywords used: {{ playlist_keywords }}</p>
-        {% if mood %}
-        <p>Mood: {{ mood }}</p>
-        {% endif %}
-        <a href="{{ url_for('index') }}">Try another playlist</a>
+    <div class="container result-container">
+        <h1 class="album-title">{{ title }}</h1>
+        
+        <div class="cover-display">
+            <img src="{{ url_for('serve_image', filename=image_file) }}" alt="Album Cover" class="album-cover">
+        </div>
+        
+        <div class="playlist-info">
+            <div class="info-section">
+                <h3>Playlist Analysis</h3>
+                
+                <div class="info-grid">
+                    <div class="info-item">
+                        <span class="info-label">Genres:</span>
+                        <span class="info-value">{{ genres }}</span>
+                    </div>
+                    
+                    <div class="info-item">
+                        <span class="info-label">Mood:</span>
+                        <span class="info-value">{{ mood }}</span>
+                    </div>
+                    
+                    <div class="info-item">
+                        <span class="info-label">Tempo:</span>
+                        <span class="info-value">{{ tempo }}</span>
+                    </div>
+                    
+                    <div class="info-item">
+                        <span class="info-label">Energy:</span>
+                        <span class="info-value">{{ energy }}</span>
+                    </div>
+                    
+                    {% if features %}
+                    <div class="info-item">
+                        <span class="info-label">Danceability:</span>
+                        <span class="info-value">{{ "%.2f"|format(features.danceability) }}</span>
+                    </div>
+                    
+                    <div class="info-item">
+                        <span class="info-label">Acousticness:</span>
+                        <span class="info-value">{{ "%.2f"|format(features.acousticness) }}</span>
+                    </div>
+                    
+                    <div class="info-item">
+                        <span class="info-label">Valence:</span>
+                        <span class="info-value">{{ "%.2f"|format(features.valence) }}</span>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        
+        <div class="actions">
+            <a href="{{ url_for('index') }}" class="button">Generate Another Cover</a>
+            <!-- You could add download functionality here -->
+        </div>
     </div>
     <script src="{{ url_for('static', filename='script.js') }}"></script>
 </body>

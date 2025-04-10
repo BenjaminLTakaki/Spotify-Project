@@ -1,37 +1,178 @@
 body {
-    font-family: Arial, sans-serif;
-    background-color: #f4f4f4;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background-color: #121212;
+    color: #f8f8f8;
     margin: 0;
     padding: 20px;
+    line-height: 1.6;
 }
 
 .container {
-    max-width: 600px;
-    background: #fff;
+    max-width: 800px;
+    background: #1e1e1e;
     padding: 30px;
-    margin: auto;
-    box-shadow: 0 0 10px rgba(0,0,0,0.1);
+    margin: 20px auto;
+    border-radius: 10px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+h1 {
+    color: #1DB954; /* Spotify green */
     text-align: center;
+    margin-bottom: 20px;
+    font-weight: 700;
+}
+
+.form-group {
+    margin-bottom: 20px;
+}
+
+label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: 600;
 }
 
 input[type="text"] {
-    width: 80%;
-    padding: 10px;
-    margin: 10px 0;
-}
-
-button {
-    padding: 10px 20px;
-    background-color: #007BFF;
+    width: 100%;
+    padding: 12px;
     border: none;
+    background-color: #333;
     color: #fff;
-    cursor: pointer;
+    border-radius: 5px;
+    font-size: 1rem;
+    margin-bottom: 5px;
 }
 
-button:hover {
-    background-color: #0056b3;
+small {
+    display: block;
+    color: #a0a0a0;
+    font-size: 0.8rem;
+    margin-top: 5px;
+}
+
+.submit-btn {
+    padding: 12px 24px;
+    background-color: #1DB954;
+    border: none;
+    border-radius: 30px;
+    color: #fff;
+    font-weight: bold;
+    cursor: pointer;
+    font-size: 1rem;
+    display: block;
+    margin: 25px auto;
+    transition: background-color 0.3s, transform 0.2s;
+}
+
+.submit-btn:hover {
+    background-color: #1ed760;
+    transform: translateY(-2px);
 }
 
 .error {
-    color: red;
+    color: #ff5252;
+    background-color: rgba(255, 82, 82, 0.1);
+    padding: 10px;
+    border-radius: 5px;
+    margin: 15px 0;
+    text-align: center;
+}
+
+.info-section {
+    margin-top: 30px;
+    padding-top: 20px;
+    border-top: 1px solid #333;
+}
+
+.info-section h3 {
+    color: #1DB954;
+    margin-bottom: 10px;
+}
+
+/* Result page styles */
+.result-container {
+    text-align: center;
+}
+
+.album-title {
+    font-size: 2.2rem;
+    margin-bottom: 25px;
+    color: #fff;
+}
+
+.cover-display {
+    margin: 30px auto;
+    max-width: 500px;
+}
+
+.album-cover {
+    width: 100%;
+    height: auto;
+    border-radius: 8px;
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5);
+}
+
+.playlist-info {
+    background-color: #252525;
+    border-radius: 8px;
+    padding: 20px;
+    margin: 30px auto;
+    text-align: left;
+}
+
+.info-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 15px;
+    margin-top: 15px;
+}
+
+.info-item {
+    padding: 10px;
+    background-color: #333;
+    border-radius: 6px;
+}
+
+.info-label {
+    display: block;
+    font-weight: 600;
+    color: #1DB954;
+    margin-bottom: 5px;
+}
+
+.info-value {
+    color: #fff;
+    font-size: 0.95rem;
+}
+
+.actions {
+    margin-top: 30px;
+}
+
+.button {
+    display: inline-block;
+    padding: 12px 24px;
+    background-color: #1DB954;
+    color: white;
+    text-decoration: none;
+    border-radius: 30px;
+    font-weight: bold;
+    transition: background-color 0.3s, transform 0.2s;
+}
+
+.button:hover {
+    background-color: #1ed760;
+    transform: translateY(-2px);
+}
+
+@media (max-width: 600px) {
+    .container {
+        padding: 20px;
+        margin: 10px;
+    }
+    
+    .info-grid {
+        grid-template-columns: 1fr;
+    }
 }
