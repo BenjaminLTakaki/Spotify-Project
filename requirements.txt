@@ -12,3 +12,7 @@ safetensors
 xformers
 matplotlib
 numpy
+bitsandbytes
+scipy
+spacy
+requests

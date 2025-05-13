@@ -2,3 +2,4 @@
 /.env
 /model_cache/
 /generated_covers/
+/data/
