@@ -10,3 +10,5 @@ python-dotenv
 accelerate
 safetensors
 xformers
+matplotlib
+numpy

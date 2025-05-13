@@ -6,14 +6,13 @@ document.addEventListener('DOMContentLoaded', function() {
         if (playlistUrlInput.value.trim() !== '') {
             playlistUrlInput.classList.add('has-value');
         }
-        
-        // Add validation for Spotify URLs
+          // Add validation for Spotify URLs
         playlistUrlInput.addEventListener('input', function() {
             const value = this.value.trim();
             if (value !== '') {
                 this.classList.add('has-value');
-                // Simple validation for Spotify playlist URL format
-                if (value.includes('open.spotify.com/playlist/')) {
+                // Validation for Spotify playlist or album URL format
+                if (value.includes('open.spotify.com/playlist/') || value.includes('open.spotify.com/album/')) {
                     this.classList.remove('invalid');
                     this.classList.add('valid');
                 } else {
@@ -38,14 +37,13 @@ document.addEventListener('DOMContentLoaded', function() {
                 submitButton.innerHTML = 'Generating... <span class="spinner"></span>';
                 submitButton.classList.add('loading');
             }
-            
-            // Create a loading overlay
+              // Create a loading overlay
             const loadingOverlay = document.createElement('div');
             loadingOverlay.className = 'loading-overlay';
             loadingOverlay.innerHTML = `
                 <div class="loading-content">
                     <div class="loading-spinner"></div>
-                    <p>Analyzing playlist and generating cover art...</p>
+                    <p>Analyzing music and generating cover art...</p>
                     <p class="loading-subtext">This may take a minute or two</p>
                 </div>
             `;
