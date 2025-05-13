@@ -248,3 +248,145 @@ input[type="text"]:focus {
     margin-bottom: 20px;
     border-radius: 0 4px 4px 0;
 }
+
+/* Additional styles for new features */
+
+/* Preset style buttons */
+.preset-options {
+    text-align: center;
+    margin-top: 20px;
+}
+
+.preset-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 10px;
+    margin-top: 10px;
+}
+
+.preset-btn {
+    background-color: #333;
+    color: white;
+    border: none;
+    border-radius: 20px;
+    padding: 8px 14px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.preset-btn:hover {
+    background-color: #444;
+}
+
+.preset-btn.active {
+    background-color: #1DB954;
+}
+
+/* Genre percentages visualization */
+.genre-percentages-container {
+    margin-top: 20px;
+    padding-top: 15px;
+    border-top: 1px solid #333;
+}
+
+.genre-percentage-item {
+    margin-bottom: 10px;
+}
+
+.genre-percentage-label {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 3px;
+}
+
+.genre-percentage {
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 4px;
+    height: 8px;
+    overflow: hidden;
+    position: relative;
+}
+
+.genre-percentage-bar {
+    height: 100%;
+    background: #1DB954;
+    position: absolute;
+    left: 0;
+    top: 0;
+}
+
+.percentage-text {
+    font-size: 0.8rem;
+    text-align: right;
+    margin-top: 3px;
+    color: #a0a0a0;
+}
+
+/* Loading overlay */
+.loading-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.85);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+}
+
+.loading-content {
+    text-align: center;
+    padding: 40px;
+    background: #1e1e1e;
+    border-radius: 12px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+}
+
+.loading-spinner {
+    width: 60px;
+    height: 60px;
+    border: 5px solid rgba(29, 185, 84, 0.3);
+    border-radius: 50%;
+    border-top-color: #1DB954;
+    margin: 0 auto 20px;
+    animation: spin 1s ease infinite;
+}
+
+.loading-subtext {
+    color: #a0a0a0;
+    font-size: 0.9rem;
+}
+
+/* Additional button styles */
+.button.secondary {
+    background-color: #333;
+    margin-left: 10px;
+}
+
+.button.secondary:hover {
+    background-color: #444;
+}
+
+/* Color-coded genre items */
+.genre-percentage-item:nth-child(1) .genre-percentage-bar {
+    background-color: #1DB954; /* Spotify green */
+}
+
+.genre-percentage-item:nth-child(2) .genre-percentage-bar {
+    background-color: #1E88E5; /* Blue */
+}
+
+.genre-percentage-item:nth-child(3) .genre-percentage-bar {
+    background-color: #E53935; /* Red */
+}
+
+.genre-percentage-item:nth-child(4) .genre-percentage-bar {
+    background-color: #FFC107; /* Amber */
+}
+
+.genre-percentage-item:nth-child(5) .genre-percentage-bar {
+    background-color: #8E24AA; /* Purple */
+}

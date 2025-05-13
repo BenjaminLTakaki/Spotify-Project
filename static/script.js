@@ -127,8 +127,7 @@ document.addEventListener('DOMContentLoaded', function() {
             border-radius: 50%;
             border-top-color: #1DB954;
             margin: 0 auto 20px;
-            animation: spin 1s ease infinite;
-        }
+            animation: spin 1s ease infinite;        }
         
         .loading-subtext {
             color: #a0a0a0;
@@ -136,4 +135,136 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     `;
     document.head.appendChild(style);
+    
+    // ----- PRESET BUTTONS FUNCTIONALITY ----- //
+    const presetButtons = document.querySelectorAll('.preset-btn');
+    const moodInput = document.getElementById('mood');
+    
+    if (presetButtons.length > 0 && moodInput) {
+        presetButtons.forEach(button => {
+            button.addEventListener('click', function() {
+                // Remove active class from all buttons
+                presetButtons.forEach(btn => btn.classList.remove('active'));
+                
+                // Add active class to clicked button
+                this.classList.add('active');
+                
+                // Set the mood input value based on preset
+                const preset = this.getAttribute('data-preset');
+                switch(preset) {
+                    case 'minimalist':
+                        moodInput.value = 'clean minimalist design with subtle colors';
+                        break;
+                    case 'high-contrast':
+                        moodInput.value = 'bold high contrast design with striking visuals';
+                        break;
+                    case 'retro':
+                        moodInput.value = 'vintage retro aesthetic with analog texture';
+                        break;
+                    case 'bold-colors':
+                        moodInput.value = 'vibrant colorful design with bold typography';
+                        break;
+                }
+            });
+        });
+    }
+    
+    // ----- RESULT PAGE FUNCTIONALITIES ----- //
+    
+    // Copy title button
+    const copyTitleButton = document.getElementById('copy-title');
+    if (copyTitleButton) {
+        copyTitleButton.addEventListener('click', function() {
+            const title = document.querySelector('.album-title').textContent;
+            
+            navigator.clipboard.writeText(title)
+                .then(() => {
+                    // Show success message
+                    this.textContent = 'Title Copied!';
+                    
+                    // Reset button text after a delay
+                    setTimeout(() => {
+                        this.textContent = 'Copy Title';
+                    }, 2000);
+                })
+                .catch(err => {
+                    console.error('Failed to copy title: ', err);
+                });
+        });
+    }
+    
+    // Copy/Download cover button
+    const copyCoverButton = document.getElementById('copy-cover');
+    if (copyCoverButton) {
+        copyCoverButton.addEventListener('click', function() {
+            const imagePath = this.getAttribute('data-image-path');
+            const imageUrl = `/generated_covers/${imagePath}`;
+            
+            // Create a temporary link to download the image
+            const a = document.createElement('a');
+            a.href = imageUrl;
+            a.download = imagePath;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            
+            // Show success message
+            this.textContent = 'Cover Downloaded!';
+            
+            // Reset button text after a delay
+            setTimeout(() => {
+                this.textContent = 'Copy Cover';
+            }, 2000);
+        });
+    }
+    
+    // Regenerate cover button
+    const regenerateButton = document.getElementById('regenerate-cover');
+    if (regenerateButton) {
+        regenerateButton.addEventListener('click', function() {
+            const playlistUrl = this.getAttribute('data-playlist-url');
+            const mood = this.getAttribute('data-mood') || '';
+            
+            // Create a loading overlay
+            const loadingOverlay = document.createElement('div');
+            loadingOverlay.className = 'loading-overlay';
+            loadingOverlay.innerHTML = `
+                <div class="loading-content">
+                    <div class="loading-spinner"></div>
+                    <p>Regenerating cover with same playlist...</p>
+                    <p class="loading-subtext">This may take a minute</p>
+                </div>
+            `;
+            document.body.appendChild(loadingOverlay);
+            
+            // Make AJAX request to regenerate endpoint
+            fetch('/api/regenerate', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    playlist_url: playlistUrl,
+                    mood: mood
+                }),
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Refresh the page to show new results
+                    window.location.reload();
+                } else {
+                    // Remove loading overlay
+                    document.body.removeChild(loadingOverlay);
+                    alert('Error: ' + data.error);
+                }
+            })
+            .catch(error => {
+                // Remove loading overlay
+                document.body.removeChild(loadingOverlay);
+                console.error('Error regenerating cover:', error);
+                alert('Failed to regenerate cover. Please try again.');
+            });
+        });
+    }
 });

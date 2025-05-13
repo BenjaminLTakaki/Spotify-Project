@@ -1,8 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta charset="UTF-8">    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Spotify Music Cover Generator</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
@@ -21,11 +20,20 @@
                 <input type="text" id="playlist_url" name="playlist_url" placeholder="https://open.spotify.com/playlist/... or https://open.spotify.com/album/..." required>
                 <small>Paste the full URL of a Spotify playlist or album</small>
             </div>
-            
-            <div class="form-group">
+              <div class="form-group">
                 <label for="mood">Optional Mood Override:</label>
                 <input type="text" id="mood" name="mood" placeholder="e.g., energetic, dreamy, nostalgic">
                 <small>Leave empty to detect mood automatically from the music genres</small>
+            </div>
+            
+            <div class="form-group preset-options">
+                <label>Preset styles:</label>
+                <div class="preset-buttons">
+                    <button type="button" class="preset-btn" data-preset="minimalist">Minimalist</button>
+                    <button type="button" class="preset-btn" data-preset="high-contrast">High Contrast</button>
+                    <button type="button" class="preset-btn" data-preset="retro">Retro</button>
+                    <button type="button" class="preset-btn" data-preset="bold-colors">Bold Colors</button>
+                </div>
             </div>
             
             <button type="submit" class="submit-btn">Generate Cover</button>
@@ -34,8 +42,7 @@
         <div class="info-section">
             <h3>How it works</h3>
             <p>This tool analyzes your Spotify playlist or album to extract genres from the artists. It then uses AI to generate a unique album cover that matches your music's genres and style, with a detailed genre analysis chart.</p>
-        </div>
-    </div>
+        </div>    </div>
     <script src="{{ url_for('static', filename='script.js') }}"></script>
 </body>
 </html>

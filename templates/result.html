@@ -32,15 +32,10 @@
         }
     </style>
 </head>
-<body>
-    <div class="container result-container">        <h1 class="album-title">{{ title }}</h1>
+<body>    <div class="container result-container">
+        <h1 class="album-title">{{ title }}</h1>
         
-        {% if using_fallback %}
-        <div class="fallback-warning">
-            <p><strong>Note:</strong> Some Spotify data couldn't be retrieved. The cover was generated using estimated values for some audio features.</p>
-        </div>
-        {% endif %}
-          <div class="result-layout">
+        <div class="result-layout">
             <!-- Album cover on the left -->
             <div class="cover-display">
                 <img src="{{ url_for('serve_image', filename=image_file) }}" alt="Album Cover" class="album-cover">
@@ -57,20 +52,11 @@
             {% endif %}
         </div>
         
-        {% if using_fallback %}
-        <div class="fallback-warning">
-            <p><strong>Note:</strong> Some Spotify data couldn't be retrieved. The cover was generated using estimated values for the genres.</p>
-        </div>
-        {% endif %}
         <div class="playlist-info">
             <div class="info-section">
                 <div class="info-header">
                     <h3>Music Analysis for "{{ playlist_name }}"</h3>
-                    {% if using_fallback %}
-                    <span class="fallback-indicator">Using Fallback Data</span>
-                    {% endif %}
                 </div>
-                
                 <div class="info-grid">
                     <div class="info-item">
                         <span class="info-label">Top Genres:</span>
@@ -90,12 +76,29 @@
                         {% if not found_genres %}<span class="fallback-indicator">estimated</span>{% endif %}
                     </div>
                 </div>
+                
+                <!-- Genre percentages visualization -->
+                {% if genre_percentages %}
+                <div class="genre-percentages-container">
+                    <h4>Genre Distribution</h4>
+                    {% for genre in genre_percentages %}
+                    <div class="genre-percentage-item">
+                        <div class="genre-percentage-label">{{ genre.name }}</div>
+                        <div class="genre-percentage">
+                            <div class="genre-percentage-bar"style="width:{{ genre.percentage|default(0) }}%"></div>                        </div>
+                        <div class="percentage-text">{{ genre.percentage }}%</div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
             </div>
         </div>
         
         <div class="actions">
             <a href="{{ url_for('index') }}" class="button">Generate Another Cover</a>
-        </div>
+            <button id="regenerate-cover" class="button" data-playlist-url="{{ playlist_url }}" data-mood="{{ user_mood }}">Regenerate Cover</button>
+            <button id="copy-title" class="button secondary">Copy Title</button>
+            <button id="copy-cover" class="button secondary" data-image-path="{{ image_file }}">Copy Cover</button>        </div>
     </div>
     <script src="{{ url_for('static', filename='script.js') }}"></script>
 </body>
