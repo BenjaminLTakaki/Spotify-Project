@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Spotify Playlist Cover Generator</title>
+    <title>Spotify Music Cover Generator</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
     <div class="container">
-        <h1>Spotify Playlist Cover Generator</h1>
-        <p>Create AI-generated album art based on your playlist's audio features</p>
+        <h1>Spotify Music Cover Generator</h1>
+        <p>Create AI-generated album art based on your playlist or album's genres</p>
         
         {% if error %}
             <p class="error">{{ error }}</p>
@@ -17,15 +17,15 @@
         
         <form method="POST">
             <div class="form-group">
-                <label for="playlist_url">Spotify Playlist URL:</label>
-                <input type="text" id="playlist_url" name="playlist_url" placeholder="https://open.spotify.com/playlist/..." required>
-                <small>Paste the full URL of a public Spotify playlist</small>
+                <label for="playlist_url">Spotify Playlist or Album URL:</label>
+                <input type="text" id="playlist_url" name="playlist_url" placeholder="https://open.spotify.com/playlist/... or https://open.spotify.com/album/..." required>
+                <small>Paste the full URL of a Spotify playlist or album</small>
             </div>
             
             <div class="form-group">
                 <label for="mood">Optional Mood Override:</label>
                 <input type="text" id="mood" name="mood" placeholder="e.g., energetic, dreamy, nostalgic">
-                <small>Leave empty to detect mood automatically from your tracks</small>
+                <small>Leave empty to detect mood automatically from the music genres</small>
             </div>
             
             <button type="submit" class="submit-btn">Generate Cover</button>
@@ -33,7 +33,7 @@
         
         <div class="info-section">
             <h3>How it works</h3>
-            <p>This tool analyzes your Spotify playlist to extract audio features like energy, tempo, danceability, and more. It then uses AI to generate a unique album cover that matches your music's mood and style.</p>
+            <p>This tool analyzes your Spotify playlist or album to extract genres from the artists. It then uses AI to generate a unique album cover that matches your music's genres and style, with a detailed genre analysis chart.</p>
         </div>
     </div>
     <script src="{{ url_for('static', filename='script.js') }}"></script>
